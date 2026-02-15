@@ -617,7 +617,7 @@ jobs:
           set -e
           cd "$GITHUB_WORKSPACE/build/dist"
 
-          find ~/local > boost/home-runner-local.txt
+          find ~ > boost/find-home.txt
 
           # Create archives based on what was built
           if [ "${{ matrix.build }}" = "BOOST" ] || [ "${{ matrix.build }}" = "ALL" ]; then
