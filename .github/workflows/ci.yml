@@ -80,49 +80,49 @@ jobs:
             generator: "Unix Makefiles"
             shell: bash
             target: x86_64-apple-macosx
-          - name: FreeBSD-aarch64
-            os: ubuntu-latest  # ubuntu-24.04-arm is slower with the FreeBSD VM
-            arch: aarch64
-            bsd_release: '14.3'
-            generator: "Unix Makefiles"
-            shell: freebsd {0}
-          - name: FreeBSD-amd64
-            os: ubuntu-latest
-            arch: x86_64
-            bsd_release: '14.3'
-            generator: "Unix Makefiles"
-            shell: freebsd {0}
-          - name: Linux-aarch64
-            os: ubuntu-22.04
-            arch: aarch64
-            generator: "Unix Makefiles"
-            shell: bash
-            target: aarch64-linux-gnu
-          - name: Linux-ppc64le
-            os: ubuntu-22.04
-            arch: powerpc64le
-            generator: "Unix Makefiles"
-            shell: bash
-            target: powerpc64le-linux-gnu
-          - name: Linux-x86_64
-            os: ubuntu-22.04
-            arch: x86_64
-            generator: "Unix Makefiles"
-            shell: bash
-          - name: Windows-AMD64
-            os: windows-2022
-            arch: x86_64
-            generator: "MSYS Makefiles"
-            shell: msys2 {0}
-            msystem: ucrt64
-            toolchain: ucrt-x86_64
-          - name: Windows-ARM64
-            os: windows-11-arm
-            arch: aarch64
-            generator: "MSYS Makefiles"
-            shell: msys2 {0}
-            msystem: clangarm64
-            toolchain: clang-aarch64
+          # - name: FreeBSD-aarch64
+          #   os: ubuntu-latest  # ubuntu-24.04-arm is slower with the FreeBSD VM
+          #   arch: aarch64
+          #   bsd_release: '14.3'
+          #   generator: "Unix Makefiles"
+          #   shell: freebsd {0}
+          # - name: FreeBSD-amd64
+          #   os: ubuntu-latest
+          #   arch: x86_64
+          #   bsd_release: '14.3'
+          #   generator: "Unix Makefiles"
+          #   shell: freebsd {0}
+          # - name: Linux-aarch64
+          #   os: ubuntu-22.04
+          #   arch: aarch64
+          #   generator: "Unix Makefiles"
+          #   shell: bash
+          #   target: aarch64-linux-gnu
+          # - name: Linux-ppc64le
+          #   os: ubuntu-22.04
+          #   arch: powerpc64le
+          #   generator: "Unix Makefiles"
+          #   shell: bash
+          #   target: powerpc64le-linux-gnu
+          # - name: Linux-x86_64
+          #   os: ubuntu-22.04
+          #   arch: x86_64
+          #   generator: "Unix Makefiles"
+          #   shell: bash
+          # - name: Windows-AMD64
+          #   os: windows-2022
+          #   arch: x86_64
+          #   generator: "MSYS Makefiles"
+          #   shell: msys2 {0}
+          #   msystem: ucrt64
+          #   toolchain: ucrt-x86_64
+          # - name: Windows-ARM64
+          #   os: windows-11-arm
+          #   arch: aarch64
+          #   generator: "MSYS Makefiles"
+          #   shell: msys2 {0}
+          #   msystem: clangarm64
+          #   toolchain: clang-aarch64
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -595,14 +595,8 @@ jobs:
           if [ -d ./build/dist/boost/share ]; then
             rm -f -r ./build/dist/boost/share
           fi
-          if [ -d ./build/dist/boost/lib/cmake ]; then
-            rm -f -r ./build/dist/boost/lib/cmake
-          fi
           if [ -d ./build/dist/ffmpeg/share ]; then
             rm -f -r ./build/dist/ffmpeg/share
-          fi
-          if [ -d ./build/dist/ffmpeg/lib/cmake ]; then
-            rm -f -r ./build/dist/ffmpeg/lib/cmake
           fi
 
       - name: Create Archives
@@ -631,6 +625,7 @@ jobs:
           name: ${{ matrix.name }}-${{ matrix.build }}
           path: ./${{ matrix.name }}-*.tar.gz
 
+  # Take the output from the previous Darwin builds and use lipo to fatten up all libraries into arm64 + x86_64
   darwin-universal:
     name: Darwin universal - ${{ matrix.build }}
     needs: build
@@ -694,7 +689,7 @@ jobs:
 
           echo "PKG_DIR=${PKG_DIR}" >> "$GITHUB_ENV"
 
-      - name: Create universal binaries with lipo
+      - name: Create universal libraries with lipo
         shell: bash
         run: |
           set -euo pipefail
@@ -703,54 +698,32 @@ jobs:
           X86_ROOT="work/x86_64/${PKG_DIR}"
           UNI_ROOT="work/universal/${PKG_DIR}"
 
-          is_candidate_binary() {
-            local path="$1"
-            local base
-            base="$(basename "$path")"
-
-            case "$base" in
-              *.a|*.dylib|*.so) return 0 ;;
-            esac
-
-            # Also treat extensionless executables as candidates (e.g., ffmpeg/ffprobe).
-            if [[ "$base" != *.* && -x "$path" ]]; then
-              return 0
-            fi
-
-            return 1
-          }
-
           archs_of() {
             local path="$1"
-            # lipo prints arch list on stdout; on non-lipo files it exits non-zero.
             lipo -archs "$path" 2>/dev/null || true
           }
 
-          # Walk the universal tree. For each candidate binary that exists in both roots and
-          # whose arch sets match expectations, lipo them into the universal output.
+          # Only merge libraries
           while IFS= read -r -d '' out; do
             rel="${out#${UNI_ROOT}/}"
             arm="${ARM_ROOT}/${rel}"
             x86="${X86_ROOT}/${rel}"
 
             [[ -f "$arm" && -f "$x86" ]] || continue
-            is_candidate_binary "$out" || continue
 
             arm_archs="$(archs_of "$arm")"
             x86_archs="$(archs_of "$x86")"
 
-            # Only proceed when both inputs are lipo-readable and have the expected arch.
+            # Ensure both are lipo-readable and have the expected arch
             if [[ -n "$arm_archs" && -n "$x86_archs" ]] \
               && [[ " $arm_archs " == *" arm64 "* ]] \
               && [[ " $x86_archs " == *" x86_64 "* ]]; then
-              echo "lipo: ${rel} (arm: ${arm_archs}) (x86: ${x86_archs})"
+              echo "lipo: ${rel} (${arm_archs} ${x86_archs})"
               lipo -create "$arm" "$x86" -output "$out"
             else
-              # Leave as-is (headers, text, scripts, non-lipo-able files, etc.)
-              # Useful debug line if you ever wonder why something didn't merge:
-              echo "skip: ${rel} (arm: ${arm_archs:-n/a}) (x86: ${x86_archs:-n/a})"
+              echo "skip: ${rel} (${arm_archs:-n/a} ${x86_archs:-n/a})"
             fi
-          done < <(find "$UNI_ROOT" -type f -print0)
+          done < <(find "$UNI_ROOT" -type f \( -name "*.a" -o -name "*.dylib" \) -print0)
 
       - name: Create universal archive
         shell: bash
