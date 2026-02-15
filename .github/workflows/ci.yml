@@ -133,11 +133,12 @@ jobs:
           submodules: recursive
 
       # XXX cache should include '.github/workflows/ci.yml'
-      - uses: actions/cache/restore@v5
+      - name: Restore cache
+        uses: actions/cache/restore@v5
         id: cache
         with:
           key: ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
-          path: '/home/runner/local/**'
+          path: '~/local/**'
 
       - name: Prepare Dependencies Linux
         id: cross_compile
@@ -616,7 +617,7 @@ jobs:
           set -e
           cd "$GITHUB_WORKSPACE/build/dist"
 
-          find /home/runner/local > boost/home-runner-local.txt
+          find ~/local > boost/home-runner-local.txt
 
           # Create archives based on what was built
           if [ "${{ matrix.build }}" = "BOOST" ] || [ "${{ matrix.build }}" = "ALL" ]; then
@@ -631,11 +632,12 @@ jobs:
             fi
           fi
 
-      - uses: actions/cache/save@v5
+      - name: Save cache
+        uses: actions/cache/save@v5
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           key: ${{ runner.os }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
-          path: '/home/runner/local/**'
+          path: '~/local/**'
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
