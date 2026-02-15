@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - master
+      - andyg.macos-universal
   workflow_dispatch:
 
 concurrency:
