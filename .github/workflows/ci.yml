@@ -630,8 +630,117 @@ jobs:
           name: ${{ matrix.name }}-${{ matrix.build }}
           path: ./${{ matrix.name }}-*.tar.gz
 
-  conclude:
+  darwin-universal:
+    name: Darwin universal - ${{ matrix.build }}
     needs: build
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - BOOST
+          - FFMPEG
+    steps:
+      - name: Download Darwin artifacts (arm64)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: Darwin-arm64-${{ matrix.build }}
+          path: artifacts/arm64
+
+      - name: Download Darwin artifacts (x86_64)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: Darwin-x86_64-${{ matrix.build }}
+          path: artifacts/x86_64
+
+      - name: Extract archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/arm64 work/x86_64 work/universal
+
+          shopt -s nullglob
+          arm_tgz=(artifacts/arm64/*.tar.gz)
+          x86_tgz=(artifacts/x86_64/*.tar.gz)
+
+          if [[ ${#arm_tgz[@]} -ne 1 ]]; then
+            echo "Expected exactly 1 arm64 tarball, found ${#arm_tgz[@]}"; ls -la artifacts/arm64; exit 1
+          fi
+          if [[ ${#x86_tgz[@]} -ne 1 ]]; then
+            echo "Expected exactly 1 x86_64 tarball, found ${#x86_tgz[@]}"; ls -la artifacts/x86_64; exit 1
+          fi
+
+          tar -xzf "${arm_tgz[0]}" -C work/arm64
+          tar -xzf "${x86_tgz[0]}" -C work/x86_64
+
+          # Determine top-level package directory (boost or ffmpeg)
+          if [[ "${{ matrix.build }}" == "BOOST" ]]; then
+            PKG_DIR="boost"
+          else
+            PKG_DIR="ffmpeg"
+          fi
+
+          if [[ ! -d "work/arm64/${PKG_DIR}" ]]; then
+            echo "Missing work/arm64/${PKG_DIR}"; find work/arm64 -maxdepth 2 -type d; exit 1
+          fi
+          if [[ ! -d "work/x86_64/${PKG_DIR}" ]]; then
+            echo "Missing work/x86_64/${PKG_DIR}"; find work/x86_64 -maxdepth 2 -type d; exit 1
+          fi
+
+          # Start universal output from arm64 tree (structure + non-binaries)
+          # -a preserves symlinks/permissions/timestamps as best as possible.
+          rsync -a "work/arm64/${PKG_DIR}/" "work/universal/${PKG_DIR}/"
+
+          echo "PKG_DIR=${PKG_DIR}" >> "$GITHUB_ENV"
+
+      - name: Create universal binaries with lipo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARM_ROOT="work/arm64/${PKG_DIR}"
+          X86_ROOT="work/x86_64/${PKG_DIR}"
+          UNI_ROOT="work/universal/${PKG_DIR}"
+
+          # Walk the universal tree. For each regular file that is Mach-O and exists in both roots:
+          # - lipo -create arm + x86 into the universal output
+          # - otherwise leave as-is (headers, pkgconfig, text, etc.)
+          while IFS= read -r -d '' f; do
+            rel="${f#${UNI_ROOT}/}"
+            arm="${ARM_ROOT}/${rel}"
+            x86="${X86_ROOT}/${rel}"
+            out="${UNI_ROOT}/${rel}"
+
+            [[ -f "$arm" && -f "$x86" ]] || continue
+
+            # Only attempt lipo on Mach-O files. `file` output varies; "Mach-O" is the key substring.
+            if file -b "$arm" | grep -q "Mach-O" && file -b "$x86" | grep -q "Mach-O"; then
+              echo "lipo: ${rel}"
+              lipo -create "$arm" "$x86" -output "$out"
+            fi
+          done < <(find "$UNI_ROOT" -type f -print0)
+
+          echo "Universal contents summary:"
+          find "$UNI_ROOT" -maxdepth 3 -type f | head -n 50
+
+      - name: Create universal archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd work/universal
+          tar -czf "../../Darwin-universal-${PKG_DIR}.tar.gz" "${PKG_DIR}"
+
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        with:
+          if-no-files-found: error
+          name: Darwin-universal-${{ env.PKG_DIR }}
+          path: ./Darwin-universal-${{ env.PKG_DIR }}.tar.gz
+
+  conclude:
+    needs:
+      - build
+      - darwin-universal
     permissions: {}
     runs-on: ubuntu-latest
     steps:
@@ -646,6 +755,7 @@ jobs:
     needs:
       - release-setup
       - build
+      - darwin-universal
     permissions:
       contents: read
     runs-on: ubuntu-latest
