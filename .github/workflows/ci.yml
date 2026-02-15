@@ -630,6 +630,7 @@ jobs:
             fi
           fi
 
+      # XXX cache should include '.github/workflows/ci.yml'
       - name: Save cache
         uses: actions/cache/save@v5
         if: steps.cache.outputs.cache-hit != 'true'
