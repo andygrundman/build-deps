@@ -634,8 +634,8 @@ jobs:
         uses: actions/cache/save@v5
         if: steps.cache.outputs.cache-hit != 'true'
         with:
-          key: ${{ runner.os }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
-          path: '~/work/build-deps/build-deps/build/dist'
+          key: ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
+          path: '~/work/build-deps/build-deps/build/dist/**'
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
