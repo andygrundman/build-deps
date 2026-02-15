@@ -60,13 +60,13 @@ jobs:
         name:  # each entry must have a matching block in the "include" section below
           - Darwin-arm64
           - Darwin-x86_64
-          - FreeBSD-aarch64
-          - FreeBSD-amd64
-          - Linux-aarch64
-          - Linux-ppc64le
-          - Linux-x86_64
-          - Windows-AMD64
-          - Windows-ARM64
+          # - FreeBSD-aarch64
+          # - FreeBSD-amd64
+          # - Linux-aarch64
+          # - Linux-ppc64le
+          # - Linux-x86_64
+          # - Windows-AMD64
+          # - Windows-ARM64
         include:
           - name: Darwin-arm64
             os: macos-14
@@ -703,26 +703,54 @@ jobs:
           X86_ROOT="work/x86_64/${PKG_DIR}"
           UNI_ROOT="work/universal/${PKG_DIR}"
 
-          # Walk the universal tree. For each regular file that is Mach-O and exists in both roots:
-          # - lipo -create arm + x86 into the universal output
-          # - otherwise leave as-is (headers, pkgconfig, text, etc.)
-          while IFS= read -r -d '' f; do
-            rel="${f#${UNI_ROOT}/}"
+          is_candidate_binary() {
+            local path="$1"
+            local base
+            base="$(basename "$path")"
+
+            case "$base" in
+              *.a|*.dylib|*.so) return 0 ;;
+            esac
+
+            # Also treat extensionless executables as candidates (e.g., ffmpeg/ffprobe).
+            if [[ "$base" != *.* && -x "$path" ]]; then
+              return 0
+            fi
+
+            return 1
+          }
+
+          archs_of() {
+            local path="$1"
+            # lipo prints arch list on stdout; on non-lipo files it exits non-zero.
+            lipo -archs "$path" 2>/dev/null || true
+          }
+
+          # Walk the universal tree. For each candidate binary that exists in both roots and
+          # whose arch sets match expectations, lipo them into the universal output.
+          while IFS= read -r -d '' out; do
+            rel="${out#${UNI_ROOT}/}"
             arm="${ARM_ROOT}/${rel}"
             x86="${X86_ROOT}/${rel}"
-            out="${UNI_ROOT}/${rel}"
 
             [[ -f "$arm" && -f "$x86" ]] || continue
+            is_candidate_binary "$out" || continue
 
-            # Only attempt lipo on Mach-O files. `file` output varies; "Mach-O" is the key substring.
-            if file -b "$arm" | grep -q "Mach-O" && file -b "$x86" | grep -q "Mach-O"; then
-              echo "lipo: ${rel}"
+            arm_archs="$(archs_of "$arm")"
+            x86_archs="$(archs_of "$x86")"
+
+            # Only proceed when both inputs are lipo-readable and have the expected arch.
+            if [[ -n "$arm_archs" && -n "$x86_archs" ]] \
+              && [[ " $arm_archs " == *" arm64 "* ]] \
+              && [[ " $x86_archs " == *" x86_64 "* ]]; then
+              echo "lipo: ${rel} (arm: ${arm_archs}) (x86: ${x86_archs})"
               lipo -create "$arm" "$x86" -output "$out"
+            else
+              # Leave as-is (headers, text, scripts, non-lipo-able files, etc.)
+              # Useful debug line if you ever wonder why something didn't merge:
+              echo "skip: ${rel} (arm: ${arm_archs:-n/a}) (x86: ${x86_archs:-n/a})"
             fi
           done < <(find "$UNI_ROOT" -type f -print0)
-
-          echo "Universal contents summary:"
-          find "$UNI_ROOT" -maxdepth 3 -type f | head -n 50
 
       - name: Create universal archive
         shell: bash
