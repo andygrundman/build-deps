@@ -132,9 +132,16 @@ jobs:
         with:
           submodules: recursive
 
+      # XXX cache should include '.github/workflows/ci.yml'
+      - uses: actions/cache/restore@v5
+        id: cache
+        with:
+          key: ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
+          path: '/home/runner/local/**'
+
       - name: Prepare Dependencies Linux
         id: cross_compile
-        if: runner.os == 'Linux' && !startsWith(matrix.shell, 'freebsd')
+        if: runner.os == 'Linux' && !startsWith(matrix.shell, 'freebsd') && steps.cache.outputs.cache-hit != 'true'
         run: |
           echo "::group::distro detection"
           # detect dist name like bionic, focal, etc
@@ -310,7 +317,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Setup Dependencies Linux
-        if: runner.os == 'Linux' && !startsWith(matrix.shell, 'freebsd')
+        if: runner.os == 'Linux' && !startsWith(matrix.shell, 'freebsd') && steps.cache.outputs.cache-hit != 'true'
         run: |
           echo "::group::apt update"
           sudo apt-get update
@@ -321,7 +328,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Setup Dependencies MacOS
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && steps.cache.outputs.cache-hit != 'true'
         run: |
           # git, libtool, ninja, pkg-config, and wget are all pre-installed in brew on GitHub runners
           # they are excluded to avoid warnings in the GitHub step summary
@@ -345,7 +352,7 @@ jobs:
           brew install ${dependencies[@]}
 
       - name: Setup msys2 Windows
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda  # v2.30.0
         with:
           msystem: ${{ matrix.msystem }}
@@ -357,7 +364,7 @@ jobs:
           # Do not use this environment variable name.
           MATRIX_MSYSTEM: ${{ matrix.msystem }}
           TOOLCHAIN: ${{ matrix.toolchain }}
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: |
           # variables
@@ -474,7 +481,7 @@ jobs:
           fi
 
       - name: Setup FreeBSD
-        if: startsWith(matrix.shell, 'freebsd')
+        if: startsWith(matrix.shell, 'freebsd') && steps.cache.outputs.cache-hit != 'true'
         uses: vmactions/freebsd-vm@c9f815bc7aa0d34c9fdd0619b034a32d6ca7b57e  # v1.4.2
         with:
           arch: ${{ matrix.arch }}
@@ -517,6 +524,7 @@ jobs:
           copyback: false
 
       - name: Configure
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"
@@ -548,19 +556,21 @@ jobs:
             -DPARALLEL_BUILDS=${{ steps.processor_count.outputs.PROCESSOR_COUNT || 1 }}
 
       - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"
           ${{ env.MAKE_CMD }} -C build --jobs=${{ steps.processor_count.outputs.PROCESSOR_COUNT || 1 }}
 
       - name: Install
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"
           ${{ env.MAKE_CMD }} -C build install
 
       - name: Sync FreeBSD build output to host
-        if: startsWith(matrix.shell, 'freebsd')
+        if: startsWith(matrix.shell, 'freebsd') && steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: rsync -av --mkpath -e ssh "freebsd:$GITHUB_WORKSPACE/build/dist" "$GITHUB_WORKSPACE/build"
 
@@ -600,10 +610,13 @@ jobs:
           fi
 
       - name: Create Archives
+        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -e
           cd "$GITHUB_WORKSPACE/build/dist"
+
+          find /home/runner/local > boost/home-runner-local.txt
 
           # Create archives based on what was built
           if [ "${{ matrix.build }}" = "BOOST" ] || [ "${{ matrix.build }}" = "ALL" ]; then
@@ -617,6 +630,12 @@ jobs:
               tar -czf "../../${{ matrix.name }}-ffmpeg.tar.gz" ffmpeg
             fi
           fi
+
+      - uses: actions/cache/save@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          key: ${{ runner.os }}-${{ matrix.build }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'patches/**') }}
+          path: '/home/runner/local/**'
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
