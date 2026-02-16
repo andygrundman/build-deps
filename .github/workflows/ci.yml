@@ -60,13 +60,13 @@ jobs:
         name:  # each entry must have a matching block in the "include" section below
           - Darwin-arm64
           - Darwin-x86_64
-          # - FreeBSD-aarch64
-          # - FreeBSD-amd64
-          # - Linux-aarch64
-          # - Linux-ppc64le
-          # - Linux-x86_64
-          # - Windows-AMD64
-          # - Windows-ARM64
+          - FreeBSD-aarch64
+          - FreeBSD-amd64
+          - Linux-aarch64
+          - Linux-ppc64le
+          - Linux-x86_64
+          - Windows-AMD64
+          - Windows-ARM64
         include:
           - name: Darwin-arm64
             os: macos-14
@@ -80,49 +80,49 @@ jobs:
             generator: "Unix Makefiles"
             shell: bash
             target: x86_64-apple-macosx
-          # - name: FreeBSD-aarch64
-          #   os: ubuntu-latest  # ubuntu-24.04-arm is slower with the FreeBSD VM
-          #   arch: aarch64
-          #   bsd_release: '14.3'
-          #   generator: "Unix Makefiles"
-          #   shell: freebsd {0}
-          # - name: FreeBSD-amd64
-          #   os: ubuntu-latest
-          #   arch: x86_64
-          #   bsd_release: '14.3'
-          #   generator: "Unix Makefiles"
-          #   shell: freebsd {0}
-          # - name: Linux-aarch64
-          #   os: ubuntu-22.04
-          #   arch: aarch64
-          #   generator: "Unix Makefiles"
-          #   shell: bash
-          #   target: aarch64-linux-gnu
-          # - name: Linux-ppc64le
-          #   os: ubuntu-22.04
-          #   arch: powerpc64le
-          #   generator: "Unix Makefiles"
-          #   shell: bash
-          #   target: powerpc64le-linux-gnu
-          # - name: Linux-x86_64
-          #   os: ubuntu-22.04
-          #   arch: x86_64
-          #   generator: "Unix Makefiles"
-          #   shell: bash
-          # - name: Windows-AMD64
-          #   os: windows-2022
-          #   arch: x86_64
-          #   generator: "MSYS Makefiles"
-          #   shell: msys2 {0}
-          #   msystem: ucrt64
-          #   toolchain: ucrt-x86_64
-          # - name: Windows-ARM64
-          #   os: windows-11-arm
-          #   arch: aarch64
-          #   generator: "MSYS Makefiles"
-          #   shell: msys2 {0}
-          #   msystem: clangarm64
-          #   toolchain: clang-aarch64
+          - name: FreeBSD-aarch64
+            os: ubuntu-latest  # ubuntu-24.04-arm is slower with the FreeBSD VM
+            arch: aarch64
+            bsd_release: '14.3'
+            generator: "Unix Makefiles"
+            shell: freebsd {0}
+          - name: FreeBSD-amd64
+            os: ubuntu-latest
+            arch: x86_64
+            bsd_release: '14.3'
+            generator: "Unix Makefiles"
+            shell: freebsd {0}
+          - name: Linux-aarch64
+            os: ubuntu-22.04
+            arch: aarch64
+            generator: "Unix Makefiles"
+            shell: bash
+            target: aarch64-linux-gnu
+          - name: Linux-ppc64le
+            os: ubuntu-22.04
+            arch: powerpc64le
+            generator: "Unix Makefiles"
+            shell: bash
+            target: powerpc64le-linux-gnu
+          - name: Linux-x86_64
+            os: ubuntu-22.04
+            arch: x86_64
+            generator: "Unix Makefiles"
+            shell: bash
+          - name: Windows-AMD64
+            os: windows-2022
+            arch: x86_64
+            generator: "MSYS Makefiles"
+            shell: msys2 {0}
+            msystem: ucrt64
+            toolchain: ucrt-x86_64
+          - name: Windows-ARM64
+            os: windows-11-arm
+            arch: aarch64
+            generator: "MSYS Makefiles"
+            shell: msys2 {0}
+            msystem: clangarm64
+            toolchain: clang-aarch64
     defaults:
       run:
         shell: ${{ matrix.shell }}
